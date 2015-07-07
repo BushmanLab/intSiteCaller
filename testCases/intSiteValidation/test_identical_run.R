@@ -35,8 +35,11 @@ while( any(still_running) ) {
 }
 message("Run stopped after: ", minutes, " minutes")
 
+### 1. check md5 for RData objects ####
+message("\nChecking md5 digest for RData files")
+source("../../check_rdata_md5.R")
 
-### check attriton table ####
+### 2. check attriton table ####
 message("\nChecking attrition tables")
 cmd <- "Rscript ../../check_stats.R > testrun.attr"
 ##message(cmd)
@@ -51,9 +54,6 @@ if( !identical(attr.old, attr.new) ) {
     q()
 } else { message("PASS") }
 
-### check md5 for RData objects ####
-message("\nChecking md5 digest for RData files")
-source("../../check_rdata_md5.R")
 
 q(save="no")
 

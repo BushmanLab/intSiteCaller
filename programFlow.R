@@ -168,7 +168,7 @@ errorCorrectBC <- function(){
   #trim seqs
   bsub(wait=paste0("done(BushmanDemultiplex_", bushmanJobID, ")"),
        jobName=paste0("BushmanTrimReads_", bushmanJobID, "[1-", nrow(completeMetadata), "]"),
-       maxmem=6000,
+       maxmem=16000,
        logFile="logs/trimOutput%I.txt",
        command=paste0("Rscript -e \"source('", codeDir, "/programFlow.R'); trimReads();\"")
   )

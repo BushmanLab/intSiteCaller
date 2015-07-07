@@ -213,8 +213,8 @@ getTrimmedSeqs <- function(qualityThreshold, badQuality, qualityWindow, primer,
   
   toload <- intersect(names(reads.p), names(reads.l))
   
-  stats.bore$reads.lLength <- mean(width(reads.l))  
-  stats.bore$reads.pLength <- mean(width(reads.p))
+  stats.bore$reads.lLength <- as.integer(mean(width(reads.l)))  
+  stats.bore$reads.pLength <- as.integer(mean(width(reads.p)))
   
   stats.bore$curated <- length(toload)
   
@@ -270,7 +270,7 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
   
   setwd(workingDir)
   
-  dereplicateSites <- function(uniqueReads){
+  dereplicateSites.eric <- function(uniqueReads){
     #do the dereplication, but loose the coordinates
     sites.reduced <- reduce(flank(uniqueReads, -5, both=TRUE), with.revmap=T)
     sites.reduced$counts <- sapply(sites.reduced$revmap, length)
@@ -293,7 +293,7 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
     dereplicatedSites
   }
   
-  standardizeSites <- function(unstandardizedSites){
+  standardizeSites.eric <- function(unstandardizedSites){
     if(length(unstandardizedSites)>0){
       dereplicated <- dereplicateSites(unstandardizedSites)
       dereplicated$dereplicatedSiteID <- seq(length(dereplicated))
@@ -317,6 +317,63 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
     else{
       unstandardizedSites
     }
+  }
+  
+  
+  standardizeSites <- function(unstandardizedSites){
+    if(length(unstandardizedSites) > 0){
+      #Get called start values for clustering  
+      unstandardizedSites$Position <- ifelse(strand(unstandardizedSites) == "+", start(unstandardizedSites), end(unstandardizedSites))
+      unstandardizedSites$Break <- ifelse(strand(unstandardizedSites) == "+", end(unstandardizedSites), start(unstandardizedSites))
+      unstandardizedSites$Score <- 95
+      unstandardizedSites$qEnd <- width(unstandardizedSites)
+      
+      #Positions clustered by 5L window and best position is chosen for cluster
+      standardized <- clusterSites(
+        psl.rd = unstandardizedSites,
+        weight = rep(1, length(unstandardizedSites)) 
+        )
+
+      start(standardized) <- ifelse(strand(standardized) == "+", 
+                                    standardized$clusteredPosition, standardized$Break)
+      end(standardized) <- ifelse(strand(standardized) == "-", 
+                                  standardized$clusteredPosition, standardized$Break)
+      
+      standardized$Position <- NULL
+      standardized$Break <- NULL
+      standardized$score <- NULL
+      standardized$qEnd <- NULL
+      standardized$clusteredPosition <- NULL
+      standardized$clonecount <- NULL
+      standardized$clusterTopHit <- NULL
+      
+      return(sort(standardized))
+    }else{
+      unstandardizedSites
+    }
+  }  
+  
+  
+  dereplicateSites <- function(sites){
+    #Reduce sites which have the same starts, but loose range info
+    #(no need to add a gapwidth as sites are standardized)
+    sites.reduced <- flank(sites, -1, start=TRUE)
+    sites.reduced <- unlist(reduce(sites.reduced, with.revmap=TRUE))
+    sites.reduced$counts <- sapply(sites.reduced$revmap, length)
+    
+    #Order original sites by revmap  
+    dereplicatedSites <- sites[unlist(sites.reduced$revmap)]
+    
+    #Skip this step and provide similar output if length(sites) = 0
+    if(length(sites) > 0){
+      dereplicatedSites <- split(dereplicatedSites, Rle(values = seq(length(sites.reduced)), lengths = sites.reduced$counts))
+    }  
+    
+    #Dereplicate reads with same standardized starts and provide the longeset width
+    dereplicatedSites <- unlist(reduce(dereplicatedSites))
+    mcols(dereplicatedSites) <- mcols(sites.reduced)
+
+    dereplicatedSites
   }
 
   #' clean up alignments and prepare for int site calling
@@ -476,11 +533,23 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
   save(multihitData, file="multihitData.RData")
   
   #making new variable multihitReads so that the naming in stats is nice
-  multihitReads <- length(multihitNames) #multihit names is already unique
+  ##multihitReads <- length(multihitNames) #multihit names is already unique
+  multihitReads <- length(unique(multihitData$unclusteredMultihits$ID))
   stats <- cbind(stats, multihitReads)
+
+  multihitSonicLengths <- 0
+  if( length(multihitData$clusteredMultihitLengths)>0 ) {
+        multihitSonicLengths <- sum(sapply(multihitData$clusteredMultihitLengths, nrow))
+  }
+  stats <- cbind(stats, multihitSonicLengths) 
   
+  multihitClusters <- length(multihitData$clusteredMultihitPositions) #
+  stats <- cbind(stats, multihitClusters)
+
   ########## IDENTIFY UNIQUELY-PAIRED READS (real sites) ##########  
   allSites <- properlyPairedAlignments[!properlyPairedAlignments$ID %in% unclusteredMultihits$ID]
+  
+  save(allSites, file="rawSites.RData")
   
   allSites <- standardizeSites(allSites)
   sites.final <- dereplicateSites(allSites)
@@ -490,11 +559,27 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
     sites.final$posid <- paste0(as.character(seqnames(sites.final)),
                                 as.character(strand(sites.final)),
                                 start(flank(sites.final, width=-1, start=TRUE)))
-  }
+    }
+  
   save(sites.final, file="sites.final.RData")
   save(allSites, file="allSites.RData")
+
+  numAllSingleReads <- length(allSites)
+  stats <- cbind(stats, numAllSingleReads)
+  numAllSingleSonicLengths <- 0
+  if( length(sites.final)>0 ) {
+        numAllSingleSonicLengths <- length(unlist(sapply(1:length(sites.final), function(i){
+        unique(width(allSites[sites.final$revmap[[i]]]))})))
+  }
+  stats <- cbind(stats, numAllSingleSonicLengths)
+  numUniqueSites <- length(sites.final)
+  stats <- cbind(stats, numUniqueSites)
   
-  
+  totalSonicLengths <- numAllSingleSonicLengths + multihitSonicLengths
+  stats <- cbind(stats, totalSonicLengths)
+  totalEvents <- numUniqueSites + multihitClusters
+  stats <- cbind(stats, totalEvents)
+
   ########## IDENTIFY IMPROPERLY-PAIRED READS (chimeras) ##########
   singletonAlignments <- pairedAlignments[alignmentsPerPairing==1]
   strand(singletonAlignments) <- strand(allAlignments[unlist(singletonAlignments$revmap)])
