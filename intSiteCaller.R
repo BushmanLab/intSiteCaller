@@ -39,4 +39,3 @@ if( !any(commandArgs(trailingOnly = TRUE) %in% c("-j", "--jobID")) ) {
 source(file.path(parsedArgs$codeDir, "programFlow.R")) 
 
 processMetadata()
-

@@ -440,7 +440,7 @@ getTrimmedSeqs <- function(qualityThreshold, badQuality, qualityWindow, primer,
   }
 }
 
-processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, maxLength, refGenome){
+processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, maxLength, refGenome, uniqRegion){
   
   codeDir <- get(load("codeDir.RData"))
   source(paste0(codeDir, "/programFlow.R"))#for get_reference_genome function
@@ -564,14 +564,24 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
   #guaranteed to have R1 and R2 at this point
   R1s <- allPairedSingleAlignments[allPairedSingleAlignments$from=="R1"]
   R2s <- allPairedSingleAlignments[allPairedSingleAlignments$from=="R2"]
-  strand(properlyPairedAlignments) <- strand(R2s)
+  
+  if(uniqRegion == "U5"){
+    strand(properlyPairedAlignments) <- strand(R2s)
+  }else if(uniqRegion == "U3"){
+    strand(properlyPairedAlignments) <- strand(R1s)
+  }
 
   #need to kick out properlyPaired Alignments that are 'outward facing'
   #therefore the beginning of R1 should always be 
   #downstream of the beginning of R2
   R1Starts <- start(flank(R1s, -1, start = TRUE))
   R2Starts <- start(flank(R2s, -1, start = TRUE))
-  isDownstream <- ifelse(strand(R2s) == "+", R1Starts > R2Starts, R1Starts < R2Starts)
+  
+  if(uniqRegion == "U5"){
+    isDownstream <- ifelse(strand(R2s) == "+", R1Starts > R2Starts, R1Starts < R2Starts)
+  }else if(uniqRegion == "U3"){
+    isDownstream <- ifelse(strand(R1s) == "+", R1Starts < R2Starts, R1Starts > R2Starts)
+  }
   isOppositeStrand <- !strand(R2s) == strand(R1s)
   properlyPairedAlignments <- properlyPairedAlignments[isDownstream & isOppositeStrand]
   

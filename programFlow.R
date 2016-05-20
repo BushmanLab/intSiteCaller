@@ -103,7 +103,7 @@ callIntSites <- function(){
   status <- tryCatch(eval(as.call(append(processAlignments,
                                          unname(as.list(completeMetadata[c("alias", "minPctIdent",
                                                                            "maxAlignStart", "maxFragLength",
-                                                                           "refGenome")]))))),
+                                                                           "refGenome", "uniqRegion")]))))),
                      error=function(e){print(paste0("Caught error: ", e$message))})
 
   save(status, file="callStatus.RData") #working directory is changed while executing getTrimmedSeqs
@@ -314,7 +314,7 @@ processMetadata <- function(){
   completeMetadata$read2 <- paste0(getwd(), "/Data/demultiplexedReps/", completeMetadata$alias, "_R2.fastq.gz")
 
   stopifnot(all(c("qualityThreshold", "badQualityBases", "qualitySlidingWindow",
-                  "primer", "ltrBit", "largeLTRFrag", "linkerSequence", "linkerCommon",
+                  "primer", "ltrBit", "uniqRegion", "largeLTRFrag", "linkerSequence", "linkerCommon",
                   "mingDNA", "read1", "read2", "alias", "vectorSeq", "minPctIdent",
                   "maxAlignStart", "maxFragLength", "gender") %in% names(completeMetadata)))
   
