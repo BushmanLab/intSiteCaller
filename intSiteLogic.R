@@ -172,7 +172,7 @@ trim_Ltr_side_reads <- function(reads.p, primer, ltrbit, maxMisMatch=0) {
                                gapOpening = 0,
                                gapExtension = 1,
                                type="overlap")
-    aln.l.df <- PairwiseAlignmentsSingleSubject2DF(aln.l, shift=nchar(primer)-1)
+    aln.l.df <- PairwiseAlignmentsSingleSubject2DF(aln.l, shift=nchar(primer))
     
     goodIdx <- (aln.p.df$score >= nchar(primer)-maxMisMatch &
                 aln.l.df$score >= nchar(ltrbit)-maxMisMatch)
@@ -468,12 +468,21 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
   #' @return Granges object
 
 
-  processBLATData <- function(algns, from){
+  processBLATData <- function(algns, from, refGenome){
     stopifnot(from == "R1" | from == "R2")
     algns$from <- from
     algns <- merge(algns, keys[c(from, "names")], by.x="qName", by.y=from)
+    algns$qtStart <- ifelse(
+      algns$strand == "+",
+      (algns$tStart - (algns$qStart)),
+      (algns$tStart - (algns$qSize - algns$qEnd - 1)))
+    algns$qtEnd <- ifelse(
+      algns$strand == "+",
+      (algns$tEnd + (algns$qSize - algns$qEnd - 1)),
+      (algns$tEnd + (algns$qStart)))    
+    
     algns.gr <- GRanges(seqnames=Rle(algns$tName),
-                        ranges=IRanges(start=algns$tStart, end=algns$tEnd),
+                        ranges = IRanges(start = (algns$qtStart + 1), end = (algns$qtEnd)), #Convert to 1-base
                         strand=Rle(algns$strand),
                         seqinfo=seqinfo(get_reference_genome(refGenome)))
     
@@ -488,13 +497,15 @@ processAlignments <- function(workingDir, minPercentIdentity, maxAlignStart, max
   psl.R2 <- list.files(".", pattern="R2.*.fa.psl.gz")
   # message("R2 psl:\n", paste(psl.R2, collapse="\n"),"\n")
   hits.R2 <- processBLATData(read.psl(psl.R2, bestScoring=F, removeFile=F),
-                             "R2")
+                             "R2",
+                             refGenome)
   save(hits.R2, file="hits.R2.RData")
   
   psl.R1 <- list.files(".", pattern="R1.*.fa.psl.gz")
   # message("R1 psl:\n", paste(psl.R1, collapse="\n"),"\n")
   hits.R1 <- processBLATData(read.psl(psl.R1, bestScoring=F, removeFile=F),
-                             "R1")
+                             "R1",
+                             refGenome)
   save(hits.R1, file="hits.R1.RData")
   
   load("stats.RData")
