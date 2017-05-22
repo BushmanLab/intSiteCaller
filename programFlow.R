@@ -18,7 +18,7 @@
 libs <- c('stringr', 'ShortRead', 'BSgenome', 'yaml')
 null <- suppressMessages(sapply(libs, library, character.only=TRUE))
 
-# Determin the path to the python currently used by conda
+# Determine the path to the python currently used by conda
 python <- system('which python', intern=T)
 
 # Load configuration file
